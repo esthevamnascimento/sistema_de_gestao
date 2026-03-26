@@ -43,7 +43,7 @@ O sistema segue o padrão de **REST API** para o Back-end, servindo *templates* 
 * **Front-end:** HTML5, JavaScript (Vanilla com Fetch API) e **Tailwind CSS** para um design responsivo, limpo e voltado para a experiência do usuário (UX).
 
 ## 📸 Telas do Sistema
-![alt text](image.png)
+![alt text](image-0.png)
 ![alt text](image-1.png)
 ![alt text](image-2.png)
 
