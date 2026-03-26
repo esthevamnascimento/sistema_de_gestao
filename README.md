@@ -43,16 +43,17 @@ O sistema segue o padrão de **REST API** para o Back-end, servindo *templates* 
 * **Front-end:** HTML5, JavaScript (Vanilla com Fetch API) e **Tailwind CSS** para um design responsivo, limpo e voltado para a experiência do usuário (UX).
 
 ## 📸 Telas do Sistema
-*(Adicione aqui screenshots do seu Dashboard, Tela de Funcionários com alertas e Portal de SSM)*
-* `![alt text](image.png)`
-* `![alt text](image-1.png)`
-* `![alt text](image-2.png)`
+![alt text](image.png)
+![alt text](image-1.png)
+![alt text](image-2.png)
+
 ## ⚙️ Como executar localmente
 
 1. Clone este repositório:
 ```bash
 git clone [https://github.com/SEU_USUARIO/SEU_REPOSITORIO.git](https://github.com/SEU_USUARIO/SEU_REPOSITORIO.git)
 cd SEU_REPOSITORIO
+```
 
 2. Crie um ambiente virtual (Opcional, mas recomendado):
 ```bash
@@ -61,22 +62,25 @@ python -m venv venv
 venv\Scripts\activate
 # No Linux/Mac:
 source venv/bin/activate
+```
 
 3. Instale as dependências:
 ```bash
 pip install -r requirements.txt
+```
 
 4. Crie o usuário Administrador padrão:
 ```bash
 python criar_usuarios.py
+```
 
 5. Inicie o servidor em ambiente de desenvolvimento:
 ```bash
 uvicorn main:app --reload
+```
 
-6. Acesse no navegador: http://localhost:8000 (Login inicial: admin | Senha: admin123)
+6. Acesse no navegador: `http://localhost:8000` (Login inicial: `admin` | Senha: `admin123`)
 
-Autor: Esthevam Alvico
-
-Desenvolvido como solução prática para otimização de rotinas de Engenharia de Projetos e TI.
 ---
+**Autor:** Esthevam Alvico  
+*Desenvolvido como solução prática para otimização de rotinas de Engenharia de Projetos e TI.*
