@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão de Equipamentos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+
+    <div id="nav-placeholder"></div>
+
+    <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow-md mt-6">
+        <h1 class="text-2xl font-bold mb-4 text-gray-800">Equipamentos de Medição</h1>
+        
+        <div id="areaCadastro">
+            <form id="equipForm" class="mb-8 space-y-4 border p-4 rounded bg-gray-50">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold">Código Interno</label>
+                        <input type="text" id="eqCode" placeholder="Ex: MANO-01" class="border p-2 rounded w-full uppercase" required>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold">Número de Série</label>
+                        <input type="text" id="eqSerial" placeholder="Ex: SN123456" class="border p-2 rounded w-full uppercase" required>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold">Data da Calibração</label>
+                        <input type="date" id="eqCalib" class="border p-2 rounded w-full" required>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold">Vencimento (Due Date)</label>
+                        <input type="date" id="eqDue" class="border p-2 rounded w-full" required>
+                    </div>
+                </div>
+                <button type="submit" class="bg-yellow-600 text-white px-6 py-2 rounded hover:bg-yellow-700 font-bold">
+                    🔧 Cadastrar Equipamento
+                </button>
+            </form>
+        </div>
+
+        <h2 class="text-xl font-semibold mb-2">Equipamentos Cadastrados</h2>
+        <ul id="equipList" class="divide-y divide-gray-200"></ul>
+    </div>
+
+    <div id="recalibModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-96">
+            <h2 class="text-xl font-bold mb-4 text-blue-700">Registrar Recalibração</h2>
+            <form id="recalibForm" class="space-y-4">
+                <input type="hidden" id="recalibId">
+                <div>
+                    <label class="text-xs text-gray-500 font-bold">Nova Data da Calibração</label>
+                    <input type="date" id="newCalibDate" class="border p-2 rounded w-full" required>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 font-bold">Novo Vencimento (Due Date)</label>
+                    <input type="date" id="newDueDate" class="border p-2 rounded w-full" required>
+                </div>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button type="button" onclick="closeRecalibModal()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded font-bold">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-bold">Salvar Certificado</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        const userRole = localStorage.getItem('role');
+        if (!token) window.location.href = '/login';
+
+        if (userRole !== 'admin') {
+            const area = document.getElementById('areaCadastro');
+            if(area) area.style.display = 'none';
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/login';
+        }
+
+        async function apiFetch(url, options = {}) {
+            options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
+            const response = await fetch(url, options);
+            if (response.status === 401) logout();
+            return response;
+        }
+
+        async function fetchEquipments() {
+            const res = await apiFetch('/api/equipment/');
+            if (!res.ok) return;
+            const equips = await res.json();
+            const list = document.getElementById('equipList');
+            list.innerHTML = '';
+            
+            equips.forEach(eq => {
+                const vencido = eq.is_expired 
+                    ? '<span class="bg-red-100 text-red-700 px-2 py-1 rounded font-bold ml-2">⚠️ Calibração Vencida</span>' 
+                    : '<span class="text-green-600 font-bold ml-2">✅ Válido</span>';
+                
+                const dataCalib = eq.calibration_date.split('-').reverse().join('/');
+                const dataVenc = eq.due_date.split('-').reverse().join('/');
+
+                const btnExcluir = userRole === 'admin' 
+                    ? `<button onclick="deleteEquip(${eq.id})" class="text-red-500 hover:text-red-700 text-sm font-bold border border-red-200 px-3 py-1 rounded hover:bg-red-50 ml-2">🗑️ Excluir</button>` : ``;
+
+                list.innerHTML += `
+                    <li class="py-4 flex flex-col md:flex-row md:justify-between items-center hover:bg-gray-50 px-2 rounded border-b">
+                        <div class="flex-grow">
+                            <strong class="text-lg text-gray-800">${eq.code}</strong> <span class="text-sm bg-gray-200 px-2 py-1 rounded text-gray-700 font-mono">SN: ${eq.serial_number}</span>
+                            <br><span class="text-gray-600 text-sm">Calibrado em: ${dataCalib} | Vence em: <span class="font-bold">${dataVenc}</span></span>
+                            ${vencido}
+                        </div>
+                        <div class="mt-3 md:mt-0 flex gap-2 flex-wrap items-center">
+                            <button onclick="openRecalibModal(${eq.id})" class="bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold px-3 py-1 rounded border border-blue-200 shadow-sm">
+                                🔄 Recalibrar
+                            </button>
+                            ${btnExcluir}
+                        </div>
+                    </li>`;
+            });
+        }
+
+        document.getElementById('equipForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                code: document.getElementById('eqCode').value.toUpperCase(),
+                serial_number: document.getElementById('eqSerial').value.toUpperCase(),
+                calibration_date: document.getElementById('eqCalib').value,
+                due_date: document.getElementById('eqDue').value
+            };
+
+            const res = await apiFetch('/api/equipment/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                fetchEquipments();
+                e.target.reset();
+            } else {
+                const error = await res.json();
+                alert("Erro: " + JSON.stringify(error.detail));
+            }
+        });
+
+        function openRecalibModal(eqId) {
+            document.getElementById('recalibId').value = eqId;
+            document.getElementById('newCalibDate').valueAsDate = new Date();
+            document.getElementById('recalibModal').classList.remove('hidden');
+        }
+
+        function closeRecalibModal() {
+            document.getElementById('recalibModal').classList.add('hidden');
+            document.getElementById('recalibForm').reset();
+        }
+
+        document.getElementById('recalibForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const eqId = document.getElementById('recalibId').value;
+            const data = {
+                calibration_date: document.getElementById('newCalibDate').value,
+                due_date: document.getElementById('newDueDate').value
+            };
+
+            const res = await apiFetch(`/api/equipment/${eqId}/recalibrate`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                closeRecalibModal();
+                fetchEquipments(); 
+            } else {
+                const error = await res.json();
+                alert("Erro ao recalibrar: " + JSON.stringify(error.detail));
+            }
+        });
+
+        async function deleteEquip(id) {
+            if(!confirm("Deseja excluir este equipamento?")) return;
+            const res = await apiFetch(`/api/equipment/${id}`, { method: 'DELETE' });
+            if(res.ok) fetchEquipments();
+        }
+
+        fetch('/nav.html').then(r => r.text()).then(html => {
+            document.getElementById('nav-placeholder').innerHTML = html;
+            const navRole = localStorage.getItem('role');
+            const badge = document.getElementById('userBadge');
+            if (badge) badge.innerText = navRole || 'Desconhecido';
+            if (navRole === 'admin') {
+                const navUsuarios = document.getElementById('navUsuarios');
+                if(navUsuarios) navUsuarios.style.display = 'inline-block';
+            }
+        });
+
+        fetchEquipments();
+    </script>
+</body>
+</html>

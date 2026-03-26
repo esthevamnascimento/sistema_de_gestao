@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão de Frotas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+
+    <div id="nav-placeholder"></div>
+
+    <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow-md mt-6">
+        <h1 class="text-2xl font-bold mb-4 text-gray-800">Gestão de Frotas</h1>
+        
+        <div id="areaCadastro">
+            <form id="fleetForm" class="mb-8 space-y-4 border p-4 rounded bg-gray-50">
+                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    <div class="lg:col-span-2">
+                        <label class="text-xs text-gray-500 font-bold">Modelo</label>
+                        <input type="text" id="fleetModel" placeholder="Ex: Strada" class="border p-2 rounded w-full" required>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold">Placa</label>
+                        <input type="text" id="fleetPlate" placeholder="ABC-1234" class="border p-2 rounded w-full uppercase" required>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold">KM Atual</label>
+                        <input type="number" step="0.1" id="fleetKm" placeholder="10500" class="border p-2 rounded w-full" required>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold">Última Manutenção</label>
+                        <input type="date" id="fleetLastMaint" class="border p-2 rounded w-full" required>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold">Próxima Manutenção</label>
+                        <input type="date" id="fleetNextMaint" class="border p-2 rounded w-full" required>
+                    </div>
+                    <div class="lg:col-span-6">
+                        <label class="text-xs text-gray-500 font-bold">Tipo de Manutenção Prevista</label>
+                        <select id="fleetType" class="border p-2 rounded w-full" required>
+                            <option value="Preventiva">Preventiva (Óleo, Filtros, Correia)</option>
+                            <option value="Corretiva">Corretiva</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 font-bold w-full md:w-auto">
+                    🚗 Cadastrar Veículo
+                </button>
+            </form>
+        </div>
+
+        <h2 class="text-xl font-semibold mb-2">Veículos Cadastrados</h2>
+        <ul id="fleetList" class="divide-y divide-gray-200"></ul>
+    </div>
+
+    <div id="fuelModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-96">
+            <h2 class="text-xl font-bold mb-4 text-indigo-700">Registrar Abastecimento</h2>
+            <form id="fuelForm" class="space-y-4">
+                <input type="hidden" id="fuelFleetId">
+                <div>
+                    <label class="text-xs text-gray-500 font-bold">Data</label>
+                    <input type="date" id="fuelDate" class="border p-2 rounded w-full" required>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold">Litros</label>
+                        <input type="number" step="0.1" id="fuelLiters" placeholder="Ex: 40.5" class="border p-2 rounded w-full" required>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold">Valor Total (R$)</label>
+                        <input type="number" step="0.01" id="fuelCost" placeholder="Ex: 230.50" class="border p-2 rounded w-full" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 font-bold">KM do Carro na Bomba</label>
+                    <input type="number" step="0.1" id="fuelKm" class="border p-2 rounded w-full" required>
+                </div>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button type="button" onclick="closeFuelModal()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded font-bold">Cancelar</button>
+                    <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 font-bold">Salvar Gasto</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="historyModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-[500px] max-h-[80vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-indigo-700">Histórico de Abastecimento</h2>
+                <button onclick="closeHistoryModal()" class="text-gray-500 hover:text-red-500 font-bold text-xl">&times;</button>
+            </div>
+            <p id="historyVehicleName" class="text-sm text-gray-600 mb-4 font-bold"></p>
+            <div class="overflow-y-auto flex-grow">
+                <ul id="historyList" class="divide-y divide-gray-200"></ul>
+            </div>
+            <div class="mt-4 pt-4 border-t flex justify-end">
+                <button onclick="closeHistoryModal()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 font-bold">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        const userRole = localStorage.getItem('role');
+        if (!token) window.location.href = '/login';
+
+        if (userRole !== 'admin') {
+            const area = document.getElementById('areaCadastro');
+            if(area) area.style.display = 'none';
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/login';
+        }
+
+        async function apiFetch(url, options = {}) {
+            options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
+            const response = await fetch(url, options);
+            if (response.status === 401) logout();
+            return response;
+        }
+
+        async function fetchFleets() {
+            const response = await apiFetch('/api/fleet/');
+            if (!response.ok) return;
+
+            const vehicles = await response.json();
+            const list = document.getElementById('fleetList');
+            list.innerHTML = '';
+            
+            vehicles.forEach(v => {
+                const alertHtml = v.maintenance_alert 
+                    ? '<span class="bg-red-100 text-red-700 px-2 py-1 rounded font-bold ml-2">⚠️ Manutenção Pendente</span>' 
+                    : '<span class="text-green-600 font-bold ml-2">✅ Em dia</span>';
+                
+                const dataMaintFormatada = v.next_maintenance_date.split('-').reverse().join('/');
+
+                const btnExcluir = userRole === 'admin' 
+                    ? `<button onclick="deleteVehicle(${v.id})" class="text-red-500 hover:text-red-700 text-sm font-bold border border-red-200 px-2 py-1 rounded hover:bg-red-50">🗑️ Excluir</button>` 
+                    : ``;
+
+                list.innerHTML += `
+                    <li class="py-4 flex flex-col md:flex-row md:justify-between items-center hover:bg-gray-50 px-2 rounded border-b">
+                        <div class="flex-grow">
+                            <strong class="text-lg text-gray-800">${v.model}</strong> <span class="text-gray-500 font-mono">(${v.plate})</span> - <span class="text-indigo-600 font-black text-lg ml-2">${v.current_km} KM</span>
+                            <br><span class="text-sm text-gray-600">Próx. Manutenção: <span class="font-bold">${dataMaintFormatada}</span> [${v.maintenance_type}]</span>
+                            ${alertHtml}
+                        </div>
+                        <div class="mt-3 md:mt-0 flex gap-2 flex-wrap justify-end">
+                            <button onclick="openFuelModal(${v.id})" class="text-green-600 hover:text-green-800 text-sm font-bold border border-green-200 px-3 py-1 rounded hover:bg-green-50 shadow-sm">⛽ Abastecer</button>
+                            <button onclick="viewHistory(${v.id}, '${v.model} - ${v.plate}')" class="text-blue-600 hover:text-blue-800 text-sm font-bold border border-blue-200 px-3 py-1 rounded hover:bg-blue-50 shadow-sm">📋 Histórico</button>
+                            ${btnExcluir}
+                        </div>
+                    </li>`;
+            });
+        }
+
+        document.getElementById('fleetForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                plate: document.getElementById('fleetPlate').value.toUpperCase(),
+                model: document.getElementById('fleetModel').value,
+                current_km: parseFloat(document.getElementById('fleetKm').value),
+                last_maintenance_date: document.getElementById('fleetLastMaint').value,
+                next_maintenance_date: document.getElementById('fleetNextMaint').value,
+                maintenance_type: document.getElementById('fleetType').value
+            };
+
+            const res = await apiFetch('/api/fleet/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if(res.ok) {
+                fetchFleets();
+                e.target.reset(); 
+            } else {
+                const error = await res.json();
+                alert("Erro: " + JSON.stringify(error.detail));
+            }
+        });
+
+        function openFuelModal(fleetId) {
+            document.getElementById('fuelFleetId').value = fleetId;
+            document.getElementById('fuelDate').valueAsDate = new Date();
+            document.getElementById('fuelModal').classList.remove('hidden');
+        }
+
+        function closeFuelModal() {
+            document.getElementById('fuelModal').classList.add('hidden');
+            document.getElementById('fuelForm').reset();
+        }
+
+        document.getElementById('fuelForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fleetId = document.getElementById('fuelFleetId').value;
+            const data = {
+                log_date: document.getElementById('fuelDate').value,
+                liters: parseFloat(document.getElementById('fuelLiters').value),
+                total_cost: parseFloat(document.getElementById('fuelCost').value),
+                km_at_fill: parseFloat(document.getElementById('fuelKm').value)
+            };
+
+            const res = await apiFetch(`/api/fleet/${fleetId}/fuel`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if(res.ok) {
+                closeFuelModal();
+                fetchFleets(); 
+            } else {
+                const error = await res.json();
+                alert("Erro ao salvar abastecimento: " + JSON.stringify(error.detail));
+            }
+        });
+
+        async function viewHistory(fleetId, vehicleName) {
+            document.getElementById('historyVehicleName').innerText = "Veículo: " + vehicleName;
+            document.getElementById('historyModal').classList.remove('hidden');
+            
+            const list = document.getElementById('historyList');
+            list.innerHTML = '<li class="py-2 text-center text-gray-500">Carregando...</li>';
+
+            const response = await apiFetch(`/api/fleet/${fleetId}/fuel`);
+            if (response.ok) {
+                const logs = await response.json();
+                list.innerHTML = '';
+                
+                if (logs.length === 0) {
+                    list.innerHTML = '<li class="py-4 text-center text-gray-500">Nenhum abastecimento registrado.</li>';
+                    return;
+                }
+
+                logs.forEach(log => {
+                    const dataLogFormatada = log.log_date.split('-').reverse().join('/');
+                    list.innerHTML += `
+                        <li class="py-3 flex justify-between items-center hover:bg-gray-50 px-2 rounded">
+                            <div>
+                                <p class="font-bold text-gray-800">${dataLogFormatada}</p>
+                                <p class="text-sm text-gray-600">KM Bomba: ${log.km_at_fill}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-black text-red-600">R$ ${log.total_cost.toFixed(2).replace('.', ',')}</p>
+                                <p class="text-sm text-gray-500 font-bold">${log.liters} Litros</p>
+                            </div>
+                        </li>
+                    `;
+                });
+            } else {
+                list.innerHTML = '<li class="py-2 text-center text-red-500">Erro ao carregar histórico.</li>';
+            }
+        }
+
+        function closeHistoryModal() {
+            document.getElementById('historyModal').classList.add('hidden');
+        }
+
+        async function deleteVehicle(id) {
+            if(!confirm("Tem certeza que deseja remover este veículo?")) return;
+            const res = await apiFetch(`/api/fleet/${id}`, { method: 'DELETE' });
+            if(res.ok) fetchFleets();
+        }
+
+        fetch('/nav.html').then(r => r.text()).then(html => {
+            document.getElementById('nav-placeholder').innerHTML = html;
+            const navRole = localStorage.getItem('role');
+            const badge = document.getElementById('userBadge');
+            if (badge) badge.innerText = navRole || 'Desconhecido';
+            if (navRole === 'admin') {
+                const navUsuarios = document.getElementById('navUsuarios');
+                if(navUsuarios) navUsuarios.style.display = 'inline-block';
+            }
+        });
+
+        fetchFleets();
+    </script>
+</body>
+</html>

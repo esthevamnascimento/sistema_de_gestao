@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão de EPIs</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+
+    <div id="nav-placeholder"></div>
+
+    <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-md mt-6">
+        <h1 class="text-2xl font-bold mb-4 text-gray-800">Gestão de EPIs</h1>
+        
+        <div id="areaCadastro">
+            <form id="epiForm" class="mb-8 space-y-4 border p-4 rounded bg-gray-50">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <input type="text" id="epiName" placeholder="Nome do EPI (ex: Luva)" class="border p-2 rounded w-full" required>
+                    <input type="text" id="epiCA" placeholder="Número do CA" class="border p-2 rounded w-full" required>
+                    <input type="date" id="epiDate" class="border p-2 rounded w-full" required title="Data de Validade do CA">
+                </div>
+                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-bold">
+                    🛡️ Cadastrar EPI
+                </button>
+            </form>
+        </div>
+
+        <h2 class="text-xl font-semibold mb-2">EPIs Cadastrados</h2>
+        <ul id="epiList" class="divide-y divide-gray-200"></ul>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        const userRole = localStorage.getItem('role');
+        if (!token) window.location.href = '/login';
+
+        if (userRole !== 'admin') {
+            const area = document.getElementById('areaCadastro');
+            if(area) area.style.display = 'none';
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/login';
+        }
+
+        async function apiFetch(url, options = {}) {
+            options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
+            const response = await fetch(url, options);
+            if (response.status === 401) logout();
+            return response;
+        }
+
+        async function fetchEPIs() {
+            const response = await apiFetch('/api/epi/');
+            if (!response.ok) return;
+            
+            const epis = await response.json();
+            const list = document.getElementById('epiList');
+            list.innerHTML = '';
+            
+            epis.forEach(epi => {
+                const isExpired = epi.is_expired 
+                    ? '<span class="text-red-500 font-bold ml-2">⚠️ VENCIDO</span>' 
+                    : '<span class="text-green-500 ml-2">✅ No prazo</span>';
+                
+                const dataFormatada = epi.ca_validity_date.split('-').reverse().join('/');
+
+                const btnExcluir = userRole === 'admin' 
+                    ? `<button onclick="deleteEPI(${epi.id})" class="text-red-500 hover:text-red-700 text-sm font-bold border border-red-100 px-2 py-1 rounded hover:bg-red-50 transition-colors">🗑️ Excluir</button>` 
+                    : ``;
+
+                list.innerHTML += `
+                    <li class="py-3 flex justify-between items-center hover:bg-gray-50 px-2 rounded transition-colors">
+                        <div>
+                            <strong class="text-gray-800">${epi.name}</strong> <span class="text-gray-500 text-sm">- CA: ${epi.ca_number}</span>
+                            <br><span class="text-sm text-gray-500">Validade: ${dataFormatada}</span>
+                            ${isExpired}
+                        </div>
+                        ${btnExcluir}
+                    </li>`;
+            });
+        }
+
+        document.getElementById('epiForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                name: document.getElementById('epiName').value,
+                ca_number: document.getElementById('epiCA').value,
+                ca_validity_date: document.getElementById('epiDate').value
+            };
+
+            const res = await apiFetch('/api/epi/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                fetchEPIs();
+                e.target.reset(); 
+            } else {
+                const error = await res.json();
+                alert("Erro: " + JSON.stringify(error.detail));
+            }
+        });
+
+        async function deleteEPI(id) {
+            if (!confirm("Excluir este EPI definitivamente?")) return;
+            const res = await apiFetch(`/api/epi/${id}`, { method: 'DELETE' });
+            if (res.ok) fetchEPIs();
+        }
+
+        fetch('/nav.html').then(r => r.text()).then(html => {
+            document.getElementById('nav-placeholder').innerHTML = html;
+            const navRole = localStorage.getItem('role');
+            const badge = document.getElementById('userBadge');
+            if (badge) badge.innerText = navRole || 'Desconhecido';
+            if (navRole === 'admin') {
+                const navUsuarios = document.getElementById('navUsuarios');
+                if(navUsuarios) navUsuarios.style.display = 'inline-block';
+            }
+        });
+
+        fetchEPIs();
+    </script>
+</body>
+</html>

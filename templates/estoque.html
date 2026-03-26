@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão de Estoque</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+
+    <div id="nav-placeholder"></div>
+
+    <div class="max-w-5xl mx-auto bg-white p-6 rounded-lg shadow-md mt-6">
+        <h1 class="text-2xl font-bold mb-4 text-gray-800">Gestão de Estoque de Materiais</h1>
+        
+        <div id="areaCadastro">
+            <form id="inventoryForm" class="mb-8 space-y-4 border p-4 rounded bg-gray-50">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold">Código do Item</label>
+                        <input type="text" id="matCode" placeholder="Ex: TUB-001" class="border p-2 rounded w-full uppercase" required>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="text-xs text-gray-500 font-bold">Nome do Material</label>
+                        <input type="text" id="matName" placeholder="Ex: Tubo de Cobre 15mm" class="border p-2 rounded w-full" required>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold">Unidade/Tipo</label>
+                        <input type="text" id="matType" placeholder="Ex: Metro, Peça" class="border p-2 rounded w-full" required>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold">Quantidade Inicial</label>
+                        <input type="number" id="matQty" placeholder="0" class="border p-2 rounded w-full" required>
+                    </div>
+                </div>
+                <button type="submit" class="bg-purple-600 text-white px-6 py-2 rounded hover:bg-purple-700 font-bold">
+                    📦 Cadastrar Material
+                </button>
+            </form>
+        </div>
+
+        <h2 class="text-xl font-semibold mb-2">Itens em Estoque</h2>
+        <ul id="inventoryList" class="divide-y divide-gray-200"></ul>
+    </div>
+
+    <div id="stockModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-96">
+            <h2 id="stockModalTitle" class="text-xl font-bold mb-4 text-purple-700">Movimentar Estoque</h2>
+            <form id="stockForm" class="space-y-4">
+                <input type="hidden" id="stockInvId">
+                <input type="hidden" id="stockAction">
+                
+                <div id="divEmployee">
+                    <label class="text-xs text-gray-500 font-bold">Quem está retirando? (Para saída)</label>
+                    <select id="stockEmployee" class="border p-2 rounded w-full bg-white"></select>
+                </div>
+                
+                <div>
+                    <label class="text-xs text-gray-500 font-bold">Quantidade</label>
+                    <input type="number" id="stockQty" min="1" class="border p-2 rounded w-full" required>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 font-bold">Data da Movimentação</label>
+                    <input type="date" id="stockDate" class="border p-2 rounded w-full" required>
+                </div>
+                
+                <div class="flex justify-end gap-2 mt-4">
+                    <button type="button" onclick="closeStockModal()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded font-bold">Cancelar</button>
+                    <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 font-bold">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="historyModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-[500px] max-h-[80vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-purple-700">Histórico de Movimentação</h2>
+                <button onclick="closeHistoryModal()" class="text-gray-500 hover:text-red-500 font-bold text-xl">&times;</button>
+            </div>
+            <p id="historyMatName" class="text-sm text-gray-600 mb-4 font-bold"></p>
+            <div class="overflow-y-auto flex-grow">
+                <ul id="historyList" class="divide-y divide-gray-200"></ul>
+            </div>
+            <div class="mt-4 pt-4 border-t flex justify-end">
+                <button onclick="closeHistoryModal()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 font-bold">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        const userRole = localStorage.getItem('role');
+        if (!token) window.location.href = '/login';
+
+        if (userRole !== 'admin') {
+            const area = document.getElementById('areaCadastro');
+            if(area) area.style.display = 'none';
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/login';
+        }
+
+        async function apiFetch(url, options = {}) {
+            options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
+            const response = await fetch(url, options);
+            if (response.status === 401) logout();
+            return response;
+        }
+
+        async function loadEmployees() {
+            const res = await apiFetch('/api/employee/');
+            if (res.ok) {
+                const employees = await res.json();
+                const sel = document.getElementById('stockEmployee');
+                sel.innerHTML = '<option value="">(Sem funcionário - Compra/Ajuste)</option>';
+                employees.forEach(e => sel.innerHTML += `<option value="${e.id}">${e.name}</option>`);
+            }
+        }
+
+        async function fetchInventory() {
+            const res = await apiFetch('/api/inventory/');
+            if (!res.ok) return;
+            const items = await res.json();
+            const list = document.getElementById('inventoryList');
+            list.innerHTML = '';
+            
+            items.forEach(item => {
+                const alerta = item.quantity <= 5 
+                    ? '<span class="text-orange-600 font-bold text-sm ml-2">⚠️ Baixo Estoque</span>' : '';
+                
+                const btnExcluir = userRole === 'admin' 
+                    ? `<button onclick="deleteItem(${item.id})" class="text-red-500 hover:text-red-700 text-sm font-bold border border-red-200 px-3 py-1 rounded hover:bg-red-50 ml-2">🗑️ Excluir</button>` : ``;
+
+                list.innerHTML += `
+                    <li class="py-4 flex flex-col md:flex-row md:justify-between items-center hover:bg-gray-50 px-2 rounded border-b">
+                        <div class="flex-grow">
+                            <strong class="text-lg text-gray-800">${item.name}</strong> <span class="text-sm bg-gray-200 px-2 py-1 rounded text-gray-700 font-mono">${item.material_code}</span>
+                            <br><span class="text-gray-600 text-sm">Em Estoque: <span class="text-xl font-black text-purple-600">${item.quantity}</span> ${item.material_type}</span>
+                            ${alerta}
+                        </div>
+                        <div class="mt-3 md:mt-0 flex gap-2 flex-wrap items-center">
+                            <button onclick="openStockModal(${item.id}, 'ENTRADA')" class="bg-green-100 text-green-700 hover:bg-green-200 font-bold px-3 py-1 rounded border border-green-300">➕ Entrada</button>
+                            <button onclick="openStockModal(${item.id}, 'SAÍDA')" class="bg-orange-100 text-orange-700 hover:bg-orange-200 font-bold px-3 py-1 rounded border border-orange-300">➖ Saída</button>
+                            <button onclick="viewHistory(${item.id}, '${item.name}')" class="text-blue-600 hover:text-blue-800 text-sm font-bold border border-blue-200 px-3 py-1 rounded hover:bg-blue-50 shadow-sm ml-2">📋 Histórico</button>
+                            ${btnExcluir}
+                        </div>
+                    </li>`;
+            });
+        }
+
+        document.getElementById('inventoryForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                material_code: document.getElementById('matCode').value.toUpperCase(),
+                name: document.getElementById('matName').value,
+                material_type: document.getElementById('matType').value,
+                quantity: parseInt(document.getElementById('matQty').value)
+            };
+
+            const res = await apiFetch('/api/inventory/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                fetchInventory();
+                e.target.reset();
+            } else {
+                const error = await res.json();
+                alert("Erro: " + JSON.stringify(error.detail));
+            }
+        });
+
+        function openStockModal(id, actionType) {
+            document.getElementById('stockInvId').value = id;
+            document.getElementById('stockAction').value = actionType;
+            document.getElementById('stockModalTitle').innerText = actionType === 'ENTRADA' ? '📥 Registrar Entrada' : '📤 Registrar Saída';
+            document.getElementById('stockDate').valueAsDate = new Date();
+            
+            // Esconde dropdown de funcionário se for entrada de compra
+            document.getElementById('divEmployee').style.display = actionType === 'SAÍDA' ? 'block' : 'none';
+            document.getElementById('stockEmployee').value = "";
+            
+            document.getElementById('stockModal').classList.remove('hidden');
+        }
+
+        function closeStockModal() {
+            document.getElementById('stockModal').classList.add('hidden');
+            document.getElementById('stockForm').reset();
+        }
+
+        document.getElementById('stockForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('stockInvId').value;
+            
+            const data = {
+                employee_id: document.getElementById('stockEmployee').value ? parseInt(document.getElementById('stockEmployee').value) : null,
+                log_date: document.getElementById('stockDate').value,
+                quantity_changed: parseInt(document.getElementById('stockQty').value),
+                action_type: document.getElementById('stockAction').value
+            };
+
+            const res = await apiFetch(`/api/inventory/${id}/log`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                closeStockModal();
+                fetchInventory();
+            } else {
+                const error = await res.json();
+                alert("Erro: " + JSON.stringify(error.detail));
+            }
+        });
+
+        async function viewHistory(invId, matName) {
+            document.getElementById('historyMatName').innerText = "Material: " + matName;
+            document.getElementById('historyModal').classList.remove('hidden');
+            
+            const list = document.getElementById('historyList');
+            list.innerHTML = '<li class="py-2 text-center text-gray-500">Carregando...</li>';
+
+            const response = await apiFetch(`/api/inventory/${invId}/log`);
+            if (response.ok) {
+                const logs = await response.json();
+                list.innerHTML = '';
+                
+                if (logs.length === 0) {
+                    list.innerHTML = '<li class="py-4 text-center text-gray-500">Nenhuma movimentação registrada.</li>';
+                    return;
+                }
+
+                logs.forEach(log => {
+                    const dataLogFormatada = log.log_date.split('-').reverse().join('/');
+                    const cor = log.action_type === 'ENTRADA' ? 'text-green-600' : 'text-orange-600';
+                    const sinal = log.action_type === 'ENTRADA' ? '+' : '-';
+
+                    list.innerHTML += `
+                        <li class="py-3 flex justify-between items-center hover:bg-gray-50 px-2 rounded">
+                            <div>
+                                <p class="font-bold text-gray-800">${dataLogFormatada} <span class="text-xs text-gray-500 ml-2">(${log.action_type})</span></p>
+                                <p class="text-sm text-gray-600">${log.action_type === 'SAÍDA' ? 'Retirado por: ' : 'Resp: '} <span class="font-bold">${log.employee_name}</span></p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-black text-xl ${cor}">${sinal}${log.quantity_changed}</p>
+                            </div>
+                        </li>
+                    `;
+                });
+            } else {
+                list.innerHTML = '<li class="py-2 text-center text-red-500">Erro ao carregar histórico.</li>';
+            }
+        }
+
+        function closeHistoryModal() {
+            document.getElementById('historyModal').classList.add('hidden');
+        }
+
+        async function deleteItem(id) {
+            if(!confirm("Deseja excluir este material do sistema?")) return;
+            const res = await apiFetch(`/api/inventory/${id}`, { method: 'DELETE' });
+            if(res.ok) fetchInventory();
+        }
+
+        fetch('/nav.html').then(r => r.text()).then(html => {
+            document.getElementById('nav-placeholder').innerHTML = html;
+            const navRole = localStorage.getItem('role');
+            const badge = document.getElementById('userBadge');
+            if (badge) badge.innerText = navRole || 'Desconhecido';
+            if (navRole === 'admin') {
+                const navUsuarios = document.getElementById('navUsuarios');
+                if(navUsuarios) navUsuarios.style.display = 'inline-block';
+            }
+        });
+
+        loadEmployees();
+        fetchInventory();
+    </script>
+</body>
+</html>

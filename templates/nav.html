@@ -1,0 +1,17 @@
+<nav class="max-w-7xl mx-auto mb-8 flex gap-3 items-center bg-white p-4 rounded-lg shadow flex-wrap text-sm">
+    <a href="/" class="text-gray-600 hover:text-indigo-600 font-bold">Dashboard</a> <span class="text-gray-300">|</span>
+    <a href="/funcionarios" class="text-gray-600 hover:text-indigo-600 font-medium">Equipe</a> <span class="text-gray-300">|</span>
+    <a href="/epis" class="text-gray-600 hover:text-indigo-600 font-medium">EPIs</a> <span class="text-gray-300">|</span>
+    <a href="/pedidos-epi" class="text-gray-600 hover:text-indigo-600 font-medium">Pedidos EPI</a> <span class="text-gray-300">|</span>
+    <a href="/frotas" class="text-gray-600 hover:text-indigo-600 font-medium">Frota</a> <span class="text-gray-300">|</span>
+    <a href="/ferramentas" class="text-gray-600 hover:text-indigo-600 font-medium">Ferramentas</a> <span class="text-gray-300">|</span>
+    <a href="/estoque" class="text-gray-600 hover:text-indigo-600 font-medium">Estoque</a> <span class="text-gray-300">|</span>
+    <a href="/equipamentos" class="text-gray-600 hover:text-indigo-600 font-medium">Medição</a> <span class="text-gray-300">|</span>
+    <a href="/ssm" class="text-red-600 hover:text-red-800 font-bold uppercase border border-red-200 px-2 py-1 rounded bg-red-50">🚨 SSM</a>
+    
+    <div class="flex-grow"></div>
+    <a href="/usuarios" id="navUsuarios" class="text-indigo-900 font-black hover:underline mr-4" style="display: none;">⚙️ Contas de Acesso</a>
+    <span id="userBadge" class="bg-gray-200 text-gray-700 px-3 py-1 rounded text-xs font-bold uppercase mr-4"></span>
+    
+    <button onclick="localStorage.clear(); window.location.href='/login';" class="text-red-500 font-bold hover:text-red-700">Sair</button>
+</nav>

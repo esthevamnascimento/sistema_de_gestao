@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solicitação de Serviço de Manutenção (SSM)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+
+    <div id="nav-placeholder"></div>
+
+    <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow-md mt-6">
+        <h1 class="text-2xl font-bold mb-4 text-red-800">Abertura de SSM (Solicitação de Manutenção)</h1>
+        
+        <form id="ssmForm" class="mb-8 space-y-4 border-l-4 border-red-500 p-4 rounded bg-red-50 shadow-sm">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="text-xs text-gray-700 font-bold">Solicitante</label>
+                    <select id="ssmEmployee" class="border p-2 rounded w-full bg-white" required></select>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-700 font-bold">Onde é o problema?</label>
+                    <select id="ssmTargetType" class="border p-2 rounded w-full bg-white" onchange="loadTargets()" required>
+                        <option value="">Selecione...</option>
+                        <option value="Frota">Veículo (Frota)</option>
+                        <option value="Ferramenta">Ferramenta</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-700 font-bold">Qual Equipamento/Veículo?</label>
+                    <select id="ssmTargetId" class="border p-2 rounded w-full bg-white" required>
+                        <option value="">Escolha primeiro o tipo ao lado</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-700 font-bold">Data do Chamado</label>
+                    <input type="date" id="ssmDate" class="border p-2 rounded w-full" required>
+                </div>
+                <div class="md:col-span-4">
+                    <label class="text-xs text-gray-700 font-bold">Descrição do Defeito / Problema</label>
+                    <input type="text" id="ssmDesc" placeholder="Ex: Freio fazendo barulho metálico" class="border p-2 rounded w-full" required>
+                </div>
+            </div>
+            <button type="submit" class="bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700 font-bold shadow">
+                🚨 Abrir Chamado de Manutenção
+            </button>
+        </form>
+
+        <h2 class="text-xl font-semibold mb-2">Histórico de Chamados (SSMs)</h2>
+        <ul id="ssmList" class="divide-y divide-gray-200"></ul>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        const userRole = localStorage.getItem('role');
+        if (!token) window.location.href = '/login';
+
+        async function apiFetch(url, options = {}) {
+            options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
+            const response = await fetch(url, options);
+            if (response.status === 401) {
+                localStorage.clear();
+                window.location.href = '/login';
+            }
+            return response;
+        }
+
+        async function loadInitialData() {
+            const resEmp = await apiFetch('/api/employee/');
+            if (resEmp.ok) {
+                const employees = await resEmp.json();
+                const sel = document.getElementById('ssmEmployee');
+                sel.innerHTML = '<option value="">Selecione quem está relatando...</option>';
+                employees.forEach(e => sel.innerHTML += `<option value="${e.id}">${e.name}</option>`);
+            }
+            document.getElementById('ssmDate').valueAsDate = new Date();
+        }
+
+        async function loadTargets() {
+            const type = document.getElementById('ssmTargetType').value;
+            const targetSelect = document.getElementById('ssmTargetId');
+            targetSelect.innerHTML = '<option value="">Carregando...</option>';
+
+            if (!type) {
+                targetSelect.innerHTML = '<option value="">Escolha primeiro o tipo</option>';
+                return;
+            }
+
+            const endpoint = type === 'Frota' ? '/api/fleet/' : '/api/tool/';
+            const res = await apiFetch(endpoint);
+            
+            if (res.ok) {
+                const items = await res.json();
+                targetSelect.innerHTML = '<option value="">Selecione o Item...</option>';
+                items.forEach(item => {
+                    const label = type === 'Frota' ? `${item.model} (${item.plate})` : `${item.name} (${item.code})`;
+                    targetSelect.innerHTML += `<option value="${item.id}">${label}</option>`;
+                });
+            }
+        }
+
+        async function fetchSSMs() {
+            const res = await apiFetch('/api/ssm/');
+            if (!res.ok) return;
+            const ssms = await res.json();
+            const list = document.getElementById('ssmList');
+            list.innerHTML = '';
+            
+            ssms.forEach(ssm => {
+                const dataFormatada = ssm.request_date.split('-').reverse().join('/');
+                
+                let statusHtml = ssm.status === 'Pendente' 
+                    ? '<span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-bold animate-pulse">⚠️ Manutenção Pendente</span>'
+                    : '<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-bold">✅ Concluído</span>';
+
+                const btnConcluir = (userRole === 'admin' && ssm.status === 'Pendente')
+                    ? `<button onclick="concluirSSM(${ssm.id})" class="bg-green-100 text-green-700 hover:bg-green-200 font-bold px-3 py-1 rounded border border-green-300 shadow-sm ml-3">Marcar como Resolvido</button>`
+                    : ``;
+
+                list.innerHTML += `
+                    <li class="py-4 flex flex-col md:flex-row md:justify-between items-center hover:bg-gray-50 px-3 rounded border-b">
+                        <div class="flex-grow w-full">
+                            <span class="bg-gray-800 text-white px-2 py-1 rounded text-[10px] font-bold uppercase mr-2">${ssm.target_type}</span>
+                            <strong class="text-lg text-gray-800">${ssm.target_name}</strong>
+                            <p class="text-gray-700 mt-1 italic">"${ssm.description}"</p>
+                            <p class="text-sm text-gray-500 mt-1">Relatado por: <span class="font-bold">${ssm.employee_name}</span> em ${dataFormatada}</p>
+                        </div>
+                        <div class="mt-3 md:mt-0 flex items-center">
+                            ${statusHtml} ${btnConcluir}
+                        </div>
+                    </li>`;
+            });
+        }
+
+        document.getElementById('ssmForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                employee_id: parseInt(document.getElementById('ssmEmployee').value),
+                target_type: document.getElementById('ssmTargetType').value,
+                target_id: parseInt(document.getElementById('ssmTargetId').value),
+                description: document.getElementById('ssmDesc').value,
+                request_date: document.getElementById('ssmDate').value
+            };
+
+            const res = await apiFetch('/api/ssm/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                fetchSSMs();
+                document.getElementById('ssmDesc').value = ''; 
+            } else {
+                const error = await res.json();
+                alert("Erro: " + JSON.stringify(error.detail));
+            }
+        });
+
+        async function concluirSSM(id) {
+            if(!confirm("Confirmar que a manutenção foi finalizada?")) return;
+            const res = await apiFetch(`/api/ssm/${id}/concluir`, { method: 'PUT' });
+            if(res.ok) fetchSSMs();
+        }
+
+        fetch('/nav.html').then(r => r.text()).then(html => {
+            document.getElementById('nav-placeholder').innerHTML = html;
+            const navRole = localStorage.getItem('role');
+            const badge = document.getElementById('userBadge');
+            if (badge) badge.innerText = navRole || 'Desconhecido';
+            if (navRole === 'admin') {
+                const navUsuarios = document.getElementById('navUsuarios');
+                if(navUsuarios) navUsuarios.style.display = 'inline-block';
+            }
+        });
+
+        loadInitialData();
+        fetchSSMs();
+    </script>
+</body>
+</html>
